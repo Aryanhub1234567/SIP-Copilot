@@ -31,6 +31,7 @@ function Icon({ name, size = 20 }: { name: string; size?: number }) {
     spark: <><path d="m12 3 1.9 5.8L20 11l-6.1 2.2L12 19l-1.9-5.8L4 11l6.1-2.2L12 3Z"/><path d="m19 14 1.2 2.8L23 18l-2.8 1.2L19 22l-1.2-2.8L15 18l2.8-1.2L19 14Z"/></>,
     shield: <><path d="M12 22s8-4 8-11V5l-8-3-8 3v6c0 7 8 11 8 11Z"/><path d="m9 12 2 2 4-4"/></>,
     close: <><path d="m18 6-12 12"/><path d="m6 6 12 12"/></>,
+    menu: <><path d="M4 6h16M4 12h16M4 18h16"/></>,
     check: <path d="m5 12 4 4L19 6"/>,
     info: <><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></>,
     calendar: <><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 11h18"/></>,
@@ -45,6 +46,8 @@ function ProgressBar({ value }: { value: number }) {
 
 export function Dashboard({ user, sip, activeSipCount, riskProfile, portfolio }: DashboardProps) {
   const router = useRouter();
+  const [sidebarOpen, setSidebarOpen] = useState<boolean | null>(null);
+  const [isMobile, setIsMobile] = useState(false);
   const [modal, setModal] = useState(false);
   const [showSipForm, setShowSipForm] = useState(false);
   const [creatingSip, setCreatingSip] = useState(false);
@@ -58,6 +61,20 @@ export function Dashboard({ user, sip, activeSipCount, riskProfile, portfolio }:
   const [contextLoading, setContextLoading] = useState(false);
   const [contextError, setContextError] = useState("");
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    const mobileQuery = window.matchMedia("(max-width: 760px)");
+    const syncViewport = (mobile: boolean) => {
+      setIsMobile(mobile);
+      setSidebarOpen(!mobile);
+    };
+    syncViewport(mobileQuery.matches);
+    const handleViewportChange = (event: MediaQueryListEvent) => syncViewport(event.matches);
+    mobileQuery.addEventListener("change", handleViewportChange);
+    return () => mobileQuery.removeEventListener("change", handleViewportChange);
+  }, []);
+
+  const sidebarExpanded = sidebarOpen ?? !isMobile;
   const newAmount = mode === "reduce" ? reducedAmount : 0;
   const currentSipAmount = sip?.monthlyAmount ?? 0;
   const goal = sip?.goal;
@@ -167,15 +184,15 @@ export function Dashboard({ user, sip, activeSipCount, riskProfile, portfolio }:
   }
 
   return (
-    <main className="app-shell">
-      <aside className="sidebar">
-        <a className="brand" href="#home" aria-label="SIP Compass home"><span className="brand-mark"><Icon name="target" size={22}/></span><span>SIP<span className="brand-light">Compass</span></span></a>
+    <main className={`app-shell ${sidebarOpen === null ? "sidebar-auto" : sidebarExpanded ? "sidebar-open" : "sidebar-closed"}`}>
+      <aside className="sidebar" aria-hidden={!sidebarExpanded}>
+        <a className="brand" href="#home" aria-label="SIP Compass home" onClick={() => isMobile && setSidebarOpen(false)}><span className="brand-mark"><Icon name="target" size={22}/></span><span>SIP<span className="brand-light">Compass</span></span></a>
         <div className="workspace-label">YOUR MONEY</div>
         <nav className="nav-list" aria-label="Main navigation">
-          <a className="nav-item" href="#overview"><Icon name="grid"/>Overview</a>
-          <a className="nav-item" href="#portfolio"><Icon name="chart"/>Portfolio</a>
-          <a className="nav-item" href="#goals"><Icon name="target"/>Goals</a>
-          <a className="nav-item active" href="#sip"><Icon name="repeat"/>SIPs<span className="nav-count">2</span></a>
+          <a className="nav-item" href="#overview" onClick={() => isMobile && setSidebarOpen(false)}><Icon name="grid"/>Overview</a>
+          <a className="nav-item" href="#portfolio" onClick={() => isMobile && setSidebarOpen(false)}><Icon name="chart"/>Portfolio</a>
+          <a className="nav-item" href="#goals" onClick={() => isMobile && setSidebarOpen(false)}><Icon name="target"/>Goals</a>
+          <a className="nav-item active" href="#sip" onClick={() => isMobile && setSidebarOpen(false)}><Icon name="repeat"/>SIPs<span className="nav-count">{activeSipCount}</span></a>
         </nav>
         <div className="sidebar-spacer"/>
         <div className="sidebar-note"><div className="note-icon"><Icon name="shield" size={18}/></div><p>Your choices stay yours.</p><span>We’re here to help you see the full picture.</span></div>
@@ -183,7 +200,7 @@ export function Dashboard({ user, sip, activeSipCount, riskProfile, portfolio }:
       </aside>
 
       <section className="main-area" id="home">
-        <header className="topbar"><div className="breadcrumbs">Your money <span>/</span> <strong>SIPs</strong></div><div className="topbar-right"><span className="demo-tag"><span/> PRIVATE ACCOUNT</span><span className="top-avatar">{initials}</span></div></header>
+        <header className="topbar"><div className="topbar-left"><button className="sidebar-toggle" aria-label={sidebarExpanded ? "Close sidebar" : "Open sidebar"} aria-expanded={sidebarExpanded} onClick={() => setSidebarOpen(!sidebarExpanded)}><Icon name={sidebarExpanded ? "close" : "menu"} size={20}/></button><div className="breadcrumbs">Your money <span>/</span> <strong>SIPs</strong></div></div><div className="topbar-right"><span className="demo-tag"><span/> PRIVATE ACCOUNT</span><span className="top-avatar">{initials}</span></div></header>
         <div className="content-wrap">
           <div className="page-intro"><div><div className="eyebrow">MONDAY, 5 OCTOBER 2026</div><h1>Your SIPs</h1><p className="page-subtitle">Small, steady steps toward what matters to you.</p></div><button className="text-button" onClick={() => setShowBreakdown(!showBreakdown)}><Icon name="info" size={17}/> How SIPs work</button></div>
           {showBreakdown && <div className="inline-explainer"><strong>A systematic investment plan (SIP)</strong> invests a chosen amount at regular intervals. Your investments can rise or fall in value; past performance does not predict future results.</div>}
@@ -225,6 +242,8 @@ export function Dashboard({ user, sip, activeSipCount, riskProfile, portfolio }:
           </>}
         </div>
       </section>
+
+      {isMobile && sidebarExpanded && <button className="sidebar-backdrop" aria-label="Close sidebar" onClick={() => setSidebarOpen(false)} />}
 
       {modal && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setModal(false); }}><section className="copilot-modal" role="dialog" aria-modal="true" aria-labelledby="copilot-title"><div className="modal-top"><div className="modal-brand"><span><Icon name="spark" size={18}/></span> SIP Compass <small>DECISION CHECK-IN</small></div><button className="modal-close" aria-label="Close" onClick={() => setModal(false)}><Icon name="close" size={19}/></button></div><div className="modal-body"><div className="modal-eyebrow">BEFORE YOU CONFIRM</div><h2 id="copilot-title">Let’s look at the full picture.</h2><p className="modal-lede">A quick check-in to help you understand what this change could mean. The decision is always yours.</p>
         <div className="choice-toggle"><button className={mode === "pause" ? "selected" : ""} onClick={() => setMode("pause")}>Pause SIP</button><button className={mode === "reduce" ? "selected" : ""} onClick={() => setMode("reduce")}>Reduce amount</button></div>
