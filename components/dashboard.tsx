@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { contributionDifference } from "@/lib/calculations";
 import { inr } from "@/lib/demo-data";
@@ -43,7 +44,11 @@ function ProgressBar({ value }: { value: number }) {
 }
 
 export function Dashboard({ user, sip, activeSipCount, riskProfile, portfolio }: DashboardProps) {
+  const router = useRouter();
   const [modal, setModal] = useState(false);
+  const [showSipForm, setShowSipForm] = useState(false);
+  const [creatingSip, setCreatingSip] = useState(false);
+  const [sipFormError, setSipFormError] = useState("");
   const [mode, setMode] = useState<Mode>("pause");
   const [months, setMonths] = useState(3);
   const [reducedAmount, setReducedAmount] = useState(5000);
@@ -132,6 +137,35 @@ export function Dashboard({ user, sip, activeSipCount, riskProfile, portfolio }:
     }
   }
 
+  async function createSip(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    setCreatingSip(true);
+    setSipFormError("");
+    const formData = new FormData(form);
+    try {
+      const response = await fetch("/api/sip", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fundName: String(formData.get("fundName") ?? ""),
+          category: String(formData.get("category") ?? ""),
+          monthlyAmount: Number(formData.get("monthlyAmount")),
+          nextDate: String(formData.get("nextDate") ?? "") || undefined,
+        }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error ?? "Could not save this SIP.");
+      setShowSipForm(false);
+      form.reset();
+      router.refresh();
+    } catch (error) {
+      setSipFormError(error instanceof Error ? error.message : "Could not save this SIP.");
+    } finally {
+      setCreatingSip(false);
+    }
+  }
+
   return (
     <main className="app-shell">
       <aside className="sidebar">
@@ -153,16 +187,28 @@ export function Dashboard({ user, sip, activeSipCount, riskProfile, portfolio }:
         <div className="content-wrap">
           <div className="page-intro"><div><div className="eyebrow">MONDAY, 5 OCTOBER 2026</div><h1>Your SIPs</h1><p className="page-subtitle">Small, steady steps toward what matters to you.</p></div><button className="text-button" onClick={() => setShowBreakdown(!showBreakdown)}><Icon name="info" size={17}/> How SIPs work</button></div>
           {showBreakdown && <div className="inline-explainer"><strong>A systematic investment plan (SIP)</strong> invests a chosen amount at regular intervals. Your investments can rise or fall in value; past performance does not predict future results.</div>}
-      {confirmed && <div className="success-banner"><span className="success-check"><Icon name="check" size={16}/></span><div><strong>Choice saved for review</strong><span>{confirmed}. No real investment instruction was sent.</span></div><button aria-label="Dismiss" onClick={() => setConfirmed("")}><Icon name="close" size={17}/></button></div>}
+          {confirmed && <div className="success-banner"><span className="success-check"><Icon name="check" size={16}/></span><div><strong>Choice saved for review</strong><span>{confirmed}. No real investment instruction was sent.</span></div><button aria-label="Dismiss" onClick={() => setConfirmed("")}><Icon name="close" size={17}/></button></div>}
+          {showSipForm && <form className="sip-entry-form" onSubmit={createSip}>
+            <div className="sip-entry-heading"><div><h2>Add an active SIP</h2><p>Enter the details shown in your fund statement.</p></div><button type="button" className="text-button" onClick={() => { setShowSipForm(false); setSipFormError(""); }}>Cancel</button></div>
+            <div className="sip-entry-fields">
+              <label>Fund name<input name="fundName" required minLength={2} maxLength={120} placeholder="e.g. Your mutual fund name" /></label>
+              <label>Category<input name="category" required minLength={2} maxLength={100} placeholder="e.g. Equity · Large cap" /></label>
+              <label>Monthly SIP amount (₹)<input name="monthlyAmount" type="number" required min="1" max="100000000" step="1" placeholder="5000" /></label>
+              <label>Next installment date <span>(optional)</span><input name="nextDate" type="date" /></label>
+            </div>
+            <p className="sip-entry-note">This is a manual record for decision support. It won’t change your SIP with the fund provider.</p>
+            {sipFormError && <div className="api-error" role="alert">{sipFormError}</div>}
+            <button className="button-pause" type="submit" disabled={creatingSip}>{creatingSip ? "Saving SIP…" : "Save SIP to my account"}</button>
+          </form>}
 
-          {!sip ? <section className="account-empty"><span className="summary-icon green"><Icon name="repeat" size={18}/></span><h2>No active SIPs found</h2><p>There are no active SIP plans linked to this signed-in account yet. Add an SIP record to your account to review pause or reduction choices.</p><button className="button-secondary" onClick={() => void signOut({ redirectTo: "/login" })}>Sign out</button></section> : <>
+          {!sip ? <section className="account-empty"><span className="summary-icon green"><Icon name="repeat" size={18}/></span><h2>No active SIPs found</h2><p>There are no active SIP plans linked to this signed-in account yet. Add your details manually to review pause or reduction choices.</p><button className="button-pause" onClick={() => setShowSipForm(true)}>Add an active SIP</button></section> : <>
           <div className="summary-grid" id="overview">
             <div className="summary-card"><div className="summary-top"><span>Portfolio invested</span><span className="summary-icon purple"><Icon name="wallet" size={17}/></span></div><strong>{inr(portfolio?.invested ?? 0)}</strong><small>{portfolio ? "Across your portfolio" : "Portfolio data not connected"}</small></div>
             <div className="summary-card"><div className="summary-top"><span>Monthly SIPs</span><span className="summary-icon green"><Icon name="repeat" size={17}/></span></div><strong>{inr(currentSipAmount)}<em>/mo</em></strong><small>{activeSipCount} active {activeSipCount === 1 ? "plan" : "plans"}</small></div>
             <div className="summary-card"><div className="summary-top"><span>Linked goal</span><span className="summary-icon peach"><Icon name="target" size={17}/></span></div><strong>{goal ? "1" : "0"}</strong><small>{goal ? "This SIP is goal-linked" : "No goal linked to this SIP"}</small></div>
           </div>
 
-          <div className="section-heading" id="sip"><div><h2>Your active SIPs</h2><p>Choose a plan to see its details.</p></div><button className="quiet-button">View all <Icon name="chevron" size={15}/></button></div>
+          <div className="section-heading" id="sip"><div><h2>Your active SIPs</h2><p>Choose a plan to see its details.</p></div><button className="quiet-button" onClick={() => setShowSipForm(true)}>Add SIP <Icon name="chevron" size={15}/></button></div>
 
           <article className="sip-card">
             <div className="sip-card-top"><div className="fund-identity"><div className="fund-logo">{sip.fundName.slice(0, 1)}</div><div><div className="fund-title-row"><h3>{sip.fundName}</h3><span className="status-pill"><i/> Active</span></div><span className="fund-category">{sip.category}</span></div></div></div>
