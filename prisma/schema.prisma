@@ -1,0 +1,172 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum RiskProfile {
+  CONSERVATIVE
+  MODERATE
+  AGGRESSIVE
+}
+
+enum SipStatus {
+  ACTIVE
+  PAUSED
+  CANCELLED
+}
+
+enum DecisionAction {
+  PAUSE
+  REDUCE
+  CONTINUE
+}
+
+enum DecisionStatus {
+  REVIEW_REQUESTED
+  DISMISSED
+}
+
+model User {
+  id           String         @id @default(cuid())
+  name         String?
+  email        String?        @unique
+  emailVerified DateTime?
+  image        String?
+  riskProfile  RiskProfile    @default(MODERATE)
+  accounts     Account[]
+  sessions     Session[]
+  goals        Goal[]
+  sips         Sip[]
+  portfolio    Portfolio?
+  decisions    DecisionEvent[]
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+}
+
+model Account {
+  id                 String  @id @default(cuid())
+  userId             String
+  type               String
+  provider           String
+  providerAccountId  String
+  refresh_token      String? @db.Text
+  access_token       String? @db.Text
+  expires_at         Int?
+  token_type          String?
+  scope               String?
+  id_token            String? @db.Text
+  session_state       String?
+  user                User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Goal {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name          String
+  targetAmount  Decimal  @db.Decimal(16, 2)
+  currentAmount Decimal  @db.Decimal(16, 2)
+  targetDate    DateTime
+  sips          Sip[]
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model Sip {
+  id            String     @id @default(cuid())
+  userId        String
+  user          User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  goalId        String?
+  goal          Goal?      @relation(fields: [goalId], references: [id], onDelete: SetNull)
+  fundName      String
+  category      String
+  monthlyAmount Decimal    @db.Decimal(12, 2)
+  startDate     DateTime   @default(now())
+  nextDate      DateTime?
+  status        SipStatus  @default(ACTIVE)
+  decisions     DecisionEvent[]
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  @@index([userId, status])
+}
+
+model Portfolio {
+  id            String    @id @default(cuid())
+  userId        String    @unique
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  investedValue Decimal   @db.Decimal(16, 2)
+  currentValue  Decimal   @db.Decimal(16, 2)
+  holdings      Holding[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model Holding {
+  id          String    @id @default(cuid())
+  portfolioId String
+  portfolio   Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  fundName    String
+  assetType   String
+  value       Decimal   @db.Decimal(16, 2)
+  allocation  Decimal   @db.Decimal(5, 2)
+  updatedAt   DateTime  @updatedAt
+
+  @@index([portfolioId])
+}
+
+model MarketSnapshot {
+  id             String   @id @default(cuid())
+  source         String
+  label          String
+  summary        String
+  periodChange   Decimal? @db.Decimal(7, 3)
+  observedAt     DateTime
+  expiresAt      DateTime
+  createdAt      DateTime @default(now())
+
+  @@index([source, observedAt])
+}
+
+model DecisionEvent {
+  id                 String         @id @default(cuid())
+  userId             String
+  user               User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sipId              String
+  sip                Sip            @relation(fields: [sipId], references: [id], onDelete: Cascade)
+  action             DecisionAction
+  proposedAmount     Decimal?       @db.Decimal(12, 2)
+  durationMonths     Int?
+  contributionDelta  Decimal        @db.Decimal(16, 2)
+  status             DecisionStatus @default(REVIEW_REQUESTED)
+  createdAt          DateTime       @default(now())
+
+  @@index([userId, createdAt])
+}
